@@ -49,7 +49,7 @@ export default function setup(syscall, state, helpers) {
         const spawner = E(vats.host).makeHost();
 
         // Needed for DApps, maybe for user clients.
-        const uploads = E(vats.uploads).getUploads();
+        const scratch = E(vats.uploads).getUploads();
 
         // Wallet for both end-user client and dapp dev client
         // await E(vats.wallet).startup({ zoe, registry, board });
@@ -98,7 +98,7 @@ export default function setup(syscall, state, helpers) {
 
         return allComparable(
           harden({
-            uploads,
+            scratch,
             spawner,
             wallet,
             network: vats.network,
