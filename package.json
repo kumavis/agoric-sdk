@@ -36,7 +36,8 @@
     "packages/cosmic-swingset",
     "packages/agoric-cli",
     "packages/deployment",
-    "packages/notifier"
+    "packages/notifier",
+    "packages/snap-dragon"
   ],
   "devDependencies": {
     "eslint": "^6.8.0",

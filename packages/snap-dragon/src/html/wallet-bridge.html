@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Agoric Wallet Bridge</title>
+  </head>
+  <body>
+    <p>This bridge is only for dApps to reach your wallet.  It contains no user-servicable parts.</p>
+
+    <script type="text/javascript">
+      const walletPublicURL = new URL('/private/wallet-bridge', window.origin.replace(/^http/, 'ws')).href;
+      const ws = new WebSocket(walletPublicURL);
+      const wsQueue = [];
+      const dappQueue = [];
+      let origin;
+      ws.addEventListener('message', ev => {
+        let obj;
+        try {
+          obj = JSON.parse(ev.data)
+        } catch (e) {
+          return;
+        }
+        if (!obj || typeof obj.type !== 'string') {
+          return;
+        }
+        if (origin === undefined) {
+          dappQueue.push(obj);
+          return;
+        }
+        if (window.parent !== window) {
+          window.parent.postMessage(obj, '*');
+        }
+      });
+
+      ws.addEventListener('open', () => {
+        if (wsQueue.length) {
+          console.debug('sending', wsQueue.length, 'queued messages from', origin);
+        }
+        while (wsQueue.length) {
+          // The queued messages are raw objects, so JSONify.
+          ws.send(JSON.stringify(wsQueue.shift()));
+        }
+      });
+
+
+      window.addEventListener('message', ev => {
+        // console.log('inbound', ev.data);
+        if (!ev.data || typeof ev.data.type !== 'string') {
+          return;
+        }
+        if (origin === undefined) {
+          // First-come, first-serve.
+          origin = ev.origin;
+          while (dappQueue.length) {
+            const dappObj = dappQueue.shift();
+            if (window.parent !== window) {
+              window.parent.postMessage(dappObj, '*');
+            }
+          }
+        }
+        // console.debug('from dapp', origin, ev.data);
+        const obj = { ...ev.data, dappOrigin: origin };
+        if (ws.readyState !== ws.OPEN) {
+          // console.log('queuing', obj);
+          wsQueue.push(obj);
+        } else {
+          // console.log('sending', obj);
+          ws.send(JSON.stringify(obj));
+        }
+      });
+    </script>
+  </body>
+</html>
