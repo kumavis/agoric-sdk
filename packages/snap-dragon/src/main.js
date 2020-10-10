@@ -2,17 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import parseArgs from 'minimist';
 import process from 'process';
-// import { spawnSync } from 'child_process';
 import { assert } from '@agoric/assert';
 
 import anylogger from 'anylogger';
 
 // Start a network service
-// import bundle from './bundle';
 import initBasedir from './init-basedir';
 import resetState from './reset-state';
-// import setGCIIngress from './set-gci-ingress';
-// import setFakeChain from './set-fake-chain';
 import start from './start';
 
 const log = anylogger('ag-solo');
@@ -73,30 +69,9 @@ start
       assert(basedir !== undefined, 'you must provide a BASEDIR');
       initBasedir(basedir, webport, webhost, subdir, egresses.split(','));
       await resetState(basedir);
-
-      // TODO: We may want to give some instructions.  This is probably not the
-      // right place to determine our context.
-      // log.error(
-      //   `Run '(cd ${basedir} && ${progname} start)' to start the vat machine`,
-      // );
       break;
     }
-    // case 'set-gci-ingress': {
-    //   const basedir = insistIsBasedir();
-    //   const { _: subArgs, ...subOpts } = parseArgs(argv.slice(1), {});
-    //   const GCI = subArgs[0];
-    //   const chainID = subOpts.chainID || 'agoric';
-    //   const rpcAddresses = subArgs.slice(1);
-    //   setGCIIngress(basedir, GCI, rpcAddresses, chainID);
-    //   break;
-    // }
-    // case 'set-fake-chain': {
-    //   const basedir = insistIsBasedir();
-    //   const { _: subArgs, role, delay } = parseArgs(argv.slice(1), {});
-    //   const GCI = subArgs[0];
-    //   setFakeChain(basedir, GCI, role, delay);
-    //   break;
-    // }
+    
     case 'start': {
       const basedir = insistIsBasedir();
       await start(basedir, argv.slice(1));
@@ -107,26 +82,7 @@ start
       await resetState(basedir);
       break;
     }
-    // case 'bundle': {
-    //   await bundle(insistIsBasedir, argv.slice(1));
-    //   break;
-    // }
-    // case 'upload-contract': {
-    //   await bundle(insistIsBasedir, [`--evaluate`, ...argv]);
-    //   break;
-    // }
-    // case 'register-http': {
-    //   await bundle(insistIsBasedir, [`--evaluate`, ...argv]);
-    //   break;
-    // }
-    // case 'calc-gci':
-    // case 'calc-rpcport': {
-    //   const cp = spawnSync(`${__dirname}/../../${argv[0]}.js`, argv.slice(1), {
-    //     stdio: 'inherit',
-    //   });
-    //   process.exit(cp.status);
-    //   break;
-    // }
+    
     default: {
       log.error(`unrecognized command ${argv[0]}`);
       log.error(`try one of: init, set-gci-ingress, start`);

@@ -39,5 +39,18 @@ ag-solo (currently bloated for many features)
     https://github.com/Agoric/agoric-sdk/blob/b4c421d6bdc042f1690c0672c89b68889e781804/packages/cosmic-swingset/lib/ag-solo/vats/bootstrap.js#L464-L496
 
 
-starting from scratch
-  
+ui
+- captp backend
+  - captp vs ws /home/xyz/Development/agoric-sdk/packages/agoric-cli/lib/deploy.js
+  - no orthog
+
+  /home/xyz/Development/agoric-sdk/packages/snap-dragon/src/vats/captp.js
+
+ui via makeBundle?
+
+whitelist for private captp in web
+  /home/xyz/Development/agoric-sdk/packages/snap-dragon/src/web.js
+in real world need to re-examine whitelist ^
+
+public captp
+

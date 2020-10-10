@@ -136,6 +136,7 @@ function makeContractHost(vatPowers, additionalEndowments = {}) {
         const transforms = [];
         const meteringEndowments = {};
         if (
+          false && // disable metering
           vatPowers &&
           vatPowers.transformMetering &&
           vatPowers.makeGetMeter

@@ -1,0 +1,14 @@
+<html>
+  <body>
+    <script src="./bundle.js"></script>
+    <script src="./bundle-init.js"></script>
+    <!-- <script>
+      // bug workaround
+      globalThis.require = () => (x) => { return x }
+      // nestedEvaluate
+      globalThis.nestedEvaluate = (src) => { return (0,eval)(src) }
+      const { default: activate } = getExportWithNestedEvaluate()
+      activate()
+    </script> -->
+  </body>
+</html>

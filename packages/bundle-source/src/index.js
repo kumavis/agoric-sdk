@@ -1,13 +1,19 @@
-import { rollup as rollup0 } from 'rollup';
+import {
+  rollup as rollup0
+} from 'rollup';
 import path from 'path';
 import resolve0 from '@rollup/plugin-node-resolve';
 import commonjs0 from '@rollup/plugin-commonjs';
 import * as babelParser from '@agoric/babel-parser';
 import babelGenerate from '@babel/generator';
 import babelTraverse from '@babel/traverse';
-import { makeTransform } from '@agoric/transform-eventual-send';
+import {
+  makeTransform
+} from '@agoric/transform-eventual-send';
 
-import { SourceMapConsumer } from 'source-map';
+import {
+  SourceMapConsumer
+} from 'source-map';
 
 const DEFAULT_MODULE_FORMAT = 'nestedEvaluate';
 const DEFAULT_FILE_PREFIX = '/bundled-source';
@@ -32,18 +38,22 @@ export function tildotPlugin() {
 export default async function bundleSource(
   startFilename,
   moduleFormat = DEFAULT_MODULE_FORMAT,
-  powers = undefined,
+  powers = undefined, {
+    plugins = [],
+    browser
+  } = {}
 ) {
   if (!SUPPORTED_FORMATS.includes(moduleFormat)) {
     throw Error(`moduleFormat ${moduleFormat} is not implemented`);
   }
   const {
     commonjsPlugin = commonjs0,
-    rollup = rollup0,
-    resolvePlugin = resolve0,
-    pathResolve = path.resolve,
-    externals = [],
+      rollup = rollup0,
+      resolvePlugin = resolve0,
+      pathResolve = path.resolve,
+      externals = [],
   } = powers || {};
+  
   const resolvedPath = pathResolve(startFilename);
   const bundle = await rollup({
     input: resolvedPath,
@@ -51,12 +61,18 @@ export default async function bundleSource(
     preserveModules: moduleFormat === 'nestedEvaluate',
     external: [...externals],
     plugins: [
-      resolvePlugin({ preferBuiltins: true }),
-      tildotPlugin(),
-      commonjsPlugin(),
+      // pluginSpy('resolve',resolvePlugin({
+      //   preferBuiltins: true,
+      //   browser
+      // })),
+      // pluginSpy('tildot', tildotPlugin()),
+      // pluginSpy('commonjsPlugin', commonjsPlugin()),
+      ...plugins.map((p, id) => pluginSpy(id, p)),
     ],
   });
-  const { output } = await bundle.generate({
+  const {
+    output
+  } = await bundle.generate({
     exports: 'named',
     format: 'cjs',
     sourcemap: true,
@@ -70,7 +86,11 @@ export default async function bundleSource(
     if (chunk.isAsset) {
       throw Error(`unprepared for assets: ${chunk.fileName}`);
     }
-    const { code, fileName, isEntry } = chunk;
+    const {
+      code,
+      fileName,
+      isEntry
+    } = chunk;
     if (isEntry) {
       entrypoint = fileName;
     }
@@ -89,13 +109,17 @@ export default async function bundleSource(
       // eslint-disable-next-line no-await-in-loop
       const consumer = await new SourceMapConsumer(chunk.map);
       const unmapped = new WeakSet();
-      let lastPos = { ...ast.loc.start };
+      let lastPos = {
+        ...ast.loc.start
+      };
       unmapLoc = loc => {
         if (!loc || unmapped.has(loc)) {
           return;
         }
         // Make sure things start at least at the right place.
-        loc.end = { ...loc.start };
+        loc.end = {
+          ...loc.start
+        };
         for (const pos of ['start', 'end']) {
           if (loc[pos]) {
             const newPos = consumer.originalPositionFor(loc[pos]);
@@ -131,7 +155,11 @@ export default async function bundleSource(
 
     babelTraverse(ast, {
       enter(p) {
-        const { loc, leadingComments, trailingComments } = p.node;
+        const {
+          loc,
+          leadingComments,
+          trailingComments
+        } = p.node;
         if (p.node.comments) {
           p.node.comments = [];
         }
@@ -150,7 +178,9 @@ export default async function bundleSource(
     });
 
     // Now generate the sources with the new positions.
-    sourceBundle[fileName] = babelGenerate(ast, { retainLines: true }).code;
+    sourceBundle[fileName] = babelGenerate(ast, {
+      retainLines: true
+    }).code;
     // console.log(`==== sourceBundle[${fileName}]\n${sourceBundle[fileName]}\n====`);
   }
 
@@ -195,6 +225,7 @@ ${sourceMap}`;
     // This function's source code is inlined in the output bundle.
     // It creates an evaluable string for a given module filename.
     const filePrefix = DEFAULT_FILE_PREFIX;
+
     function createEvalString(filename) {
       const code = sourceBundle[filename];
       if (!code) {
@@ -218,8 +249,12 @@ ${sourceMap}`;
     const nestedEvaluate = _src => {
       throw Error('need to override nestedEvaluate');
     };
+
     function computeExports(filename, exportPowers, exports) {
-      const { require: systemRequire, _log } = exportPowers;
+      const {
+        require: systemRequire,
+        _log
+      } = exportPowers;
       // This captures the endowed require.
       const match = filename.match(/^(.*)\/[^/]+$/);
       const thisdir = match ? match[1] : '.';
@@ -315,5 +350,23 @@ ${sourceMap}`;
   }
 
   // console.log(sourceMap);
-  return { source, sourceMap, moduleFormat };
+  return {
+    source,
+    sourceMap,
+    moduleFormat
+  };
+}
+
+function pluginSpy (label, plugin) {
+  console.log(label, Reflect.ownKeys(plugin))
+  const _transform = plugin.transform
+  if (!_transform) return plugin
+  plugin.transform = function (code, id) {
+    const output = _transform.call(this, code, id)
+    if (code.includes('./readable-stream')) {
+      // console.log(label, 'transform', id, output && output.code)
+    }
+    return output
+  }
+  return plugin
 }
