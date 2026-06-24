@@ -13,7 +13,7 @@ import { prepareDurableEphemeralPromiseKit } from '../src/durable-ephemeral.js';
  * Within a single incarnation a durable ephemeral promise behaves like an
  * ordinary awaitable native promise.
  */
-test('durable ephemeral promise is awaitable within an incarnation', async t => {
+test.serial('durable ephemeral promise is awaitable within an incarnation', async t => {
   annihilate();
 
   await startLife(async baggage => {
@@ -34,7 +34,7 @@ test('durable ephemeral promise is awaitable within an incarnation', async t => 
  * A settlement that happened before an upgrade is replayed durably: the
  * revived promise settles with the same value / reason.
  */
-test('settled durable ephemeral promise replays across upgrade', async t => {
+test.serial('settled durable ephemeral promise replays across upgrade', async t => {
   annihilate();
 
   await startLife(baggage => {
@@ -78,7 +78,7 @@ test('settled durable ephemeral promise replays across upgrade', async t => {
  * A promise still pending at upgrade is rejected on revival -- the in-flight
  * work is not retried. This is the defining contrast with a Vow.
  */
-test('pending durable ephemeral promise rejects across upgrade', async t => {
+test.serial('pending durable ephemeral promise rejects across upgrade', async t => {
   annihilate();
 
   await startLife(baggage => {
