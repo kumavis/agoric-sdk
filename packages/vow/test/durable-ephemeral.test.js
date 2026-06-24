@@ -42,7 +42,9 @@ test('settled durable ephemeral promise replays across upgrade', async t => {
     const makeKit = prepareDurableEphemeralPromiseKit(zone);
 
     zone.makeOnce('fulfilledKit', makeKit).settler.resolve(42);
-    zone.makeOnce('rejectedKit', makeKit).settler.reject(Error('stored reason'));
+    zone
+      .makeOnce('rejectedKit', makeKit)
+      .settler.reject(Error('stored reason'));
   });
 
   await startLife(async baggage => {
