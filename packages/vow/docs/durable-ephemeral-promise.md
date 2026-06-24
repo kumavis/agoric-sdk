@@ -1,6 +1,9 @@
 # Durable Ephemeral Promise (design exploration)
 
-Status: design draft. Not yet implemented.
+Status: prototype. A first userland implementation lives at
+`packages/vow/src/durable-ephemeral.js` with tests at
+`packages/vow/test/durable-ephemeral.test.js`. It implements option (a) below
+(pure userland on top of `@agoric/vow`/`@agoric/zone`, no liveslots changes).
 
 ## Motivation
 
@@ -124,8 +127,42 @@ Build on `@agoric/vow`'s `VowZone` / durable-zone primitives.
   settlement. This is acceptable given the "ephemeral pending" contract but
   should be documented for consumers.
 
-## Next step
+## Prototype notes (as implemented)
 
-Prototype option (a) above as a small module in `packages/vow/src`
-(e.g. `durable-ephemeral.js`) plus an upgrade test mirroring
-`test/watch-upgrade.test.js`, without touching liveslots.
+`prepareDurableEphemeralPromiseKit(zone)` returns a `makeDurableEphemeralPromiseKit`
+maker. Each kit is a durable `exoClassKit` with two facets:
+
+- `consumer.getPromise()` -> a fresh, awaitable **native** promise for the
+  current incarnation, already settled (or pending) per the durable state.
+- `settler.resolve(value)` / `settler.reject(reason)` -> records the
+  settlement durably and settles the live promise.
+
+Store the kit durably (e.g. `zone.makeOnce(key, makeDurableEphemeralPromiseKit)`)
+so it survives upgrade.
+
+Key implementation choices:
+
+- **No incarnation-number plumbing needed to detect abandonment.** A
+  module-scoped, ephemeral `WeakSet` records the settlers *created* this
+  incarnation. It is naturally empty at the start of each incarnation, and
+  `zone.makeOnce` skips the maker on revival, so a revived-but-still-pending
+  kit is never in the set -> its `getPromise()` rejects. A kit created this
+  incarnation may legitimately stay pending until its `resolve`/`reject`.
+- **Incarnation number for the disconnection reason** is tracked with a
+  durable counter bumped inside `prepare*` (which runs once per incarnation).
+  The abandonment reason reuses `makeUpgradeDisconnection` from
+  `@agoric/internal/src/upgrade-api.js`, i.e. the same
+  `{ name: 'vatUpgraded', upgradeMessage, incarnationNumber }` shape the
+  kernel uses for promises it abandons on upgrade.
+- **Storability** of the settlement reuses `zone.isStorable`, with the same
+  non-storable-fulfillment-becomes-a-stored-error fallback as `vow.js`.
+
+## Possible follow-ups
+
+- A `.promise` getter ergonomic wrapper (exo facets expose methods, not
+  getters, so the prototype uses `getPromise()`).
+- Option (b): hook revival into the liveslots `loadWatchedPromiseTable` path
+  so consumers don't have to re-acquire the kit explicitly after upgrade.
+- Decide whether a non-storable rejection reason should be preserved
+  best-effort within the settling incarnation rather than immediately
+  replaced by a stored error.
