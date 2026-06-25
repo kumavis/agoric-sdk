@@ -109,9 +109,14 @@ export const prepareDurableEphemeralPromiseKit = zone => {
   };
 
   /**
-   * Record a settlement durably and settle the live promise. Mirrors the
-   * storability handling in vow.js: storable values are persisted directly,
-   * non-storable fulfillment values are replaced by a stored error.
+   * Record a settlement durably and settle the live promise.
+   *
+   * A durable ephemeral promise can only ever *fulfill* with a value it can
+   * durably store -- otherwise it could not honor its replay contract across an
+   * upgrade. So a fulfillment with a non-storable value is turned into a
+   * *rejection* (the value cannot be faithfully reproduced, so pretending to
+   * fulfill would be a lie). An explicit rejection with a non-storable reason
+   * is preserved best-effort as a stored error.
    *
    * @param {object} settler
    * @param {{ status: string, value: unknown }} state
@@ -126,30 +131,36 @@ export const prepareDurableEphemeralPromiseKit = zone => {
     }
     harden(valueOrReason);
     const ephemera = provideEphemera(settler, state);
+    const storable = zone.isStorable(valueOrReason);
 
-    if (zone.isStorable(valueOrReason)) {
+    if (status === 'fulfilled' && storable) {
       state.value = valueOrReason;
-    } else if (status === 'fulfilled') {
-      state.value = harden(
-        assert.error(
-          X`durable ephemeral promise fulfillment was not storable: ${valueOrReason}`,
-        ),
-      );
-    } else {
-      // Best-effort: a non-storable rejection reason becomes a stored error.
-      state.value = harden(
-        assert.error(
-          X`durable ephemeral promise rejection reason was not storable: ${valueOrReason}`,
-        ),
-      );
+      state.status = 'fulfilled';
+      ephemera.resolve(/** @type {any} */ (valueOrReason));
+      return;
     }
-    state.status = status;
 
+    // Everything else settles as a rejection.
+    let reason;
     if (status === 'fulfilled') {
-      ephemera.resolve(/** @type {any} */ (state.value));
+      // Non-storable fulfillment: cannot be durably replayed, so reject.
+      reason = harden(
+        assert.error(
+          X`durable ephemeral promise cannot fulfill with a non-storable value: ${valueOrReason}`,
+        ),
+      );
+    } else if (storable) {
+      reason = valueOrReason;
     } else {
-      ephemera.reject(state.value);
+      reason = harden(
+        assert.error(
+          X`durable ephemeral promise rejected with a non-storable reason: ${valueOrReason}`,
+        ),
+      );
     }
+    state.value = reason;
+    state.status = 'rejected';
+    ephemera.reject(reason);
   };
 
   const makeKitInternal = zone.exoClassKit(

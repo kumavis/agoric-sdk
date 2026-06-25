@@ -120,3 +120,40 @@ test.serial(
     });
   },
 );
+
+/**
+ * A durable ephemeral promise can only fulfill with a storable value (so it can
+ * be replayed after upgrade). Resolving with a non-storable value rejects
+ * instead of fulfilling, and that rejection is itself durable.
+ */
+test.serial('resolving to a non-storable value rejects, durably', async t => {
+  annihilate();
+
+  await startLife(async baggage => {
+    const zone = makeDurableZone(baggage, 'durableRoot');
+    const makeKit = prepareDurableEphemeralPromiseKit(zone);
+
+    const kit = zone.makeOnce('nonStorableKit', makeKit);
+    // A bare function is not a passable, so not storable.
+    kit.settler.resolve(() => 'not storable');
+
+    // Rejects in the same incarnation rather than fulfilling.
+    await t.throwsAsync(kit.consumer.getPromise(), {
+      message: /cannot fulfill with a non-storable value/,
+    });
+  });
+
+  // The rejection persists across upgrade (it was recorded durably).
+  await startLife(async baggage => {
+    const zone = makeDurableZone(baggage, 'durableRoot');
+    const makeKit = prepareDurableEphemeralPromiseKit(zone);
+
+    const kit = zone.makeOnce('nonStorableKit', () => {
+      t.fail('nonStorableKit maker called on revival');
+      return makeKit();
+    });
+    await t.throwsAsync(kit.consumer.getPromise(), {
+      message: /cannot fulfill with a non-storable value/,
+    });
+  });
+});
