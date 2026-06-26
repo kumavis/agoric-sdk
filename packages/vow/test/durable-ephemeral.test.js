@@ -157,3 +157,66 @@ test.serial('resolving to a non-storable value rejects, durably', async t => {
     });
   });
 });
+
+/**
+ * Resolving one durable ephemeral promise to another (via its `getPromise()`)
+ * adopts the inner's settlement, like a native Promise. The adopted value is
+ * stored durably, so it replays across upgrade.
+ */
+test.serial(
+  'a durable ephemeral promise can chain to another, durably',
+  async t => {
+    annihilate();
+
+    await startLife(async baggage => {
+      const zone = makeDurableZone(baggage, 'durableRoot');
+      const makeKit = prepareDurableEphemeralPromiseKit(zone);
+
+      const inner = zone.makeOnce('inner', makeKit);
+      const outer = zone.makeOnce('outer', makeKit);
+
+      // outer adopts inner's (still pending) promise...
+      outer.settler.resolve(inner.consumer.getPromise());
+      // ...then inner settles, and outer follows.
+      inner.settler.resolve(7);
+      t.is(await outer.consumer.getPromise(), 7, 'outer adopts inner value');
+    });
+
+    await startLife(async baggage => {
+      const zone = makeDurableZone(baggage, 'durableRoot');
+      const makeKit = prepareDurableEphemeralPromiseKit(zone);
+
+      const outer = zone.makeOnce('outer', () => {
+        t.fail('outer maker called on revival');
+        return makeKit();
+      });
+      t.is(
+        await outer.consumer.getPromise(),
+        7,
+        'adopted value survived upgrade',
+      );
+    });
+  },
+);
+
+/**
+ * Chaining propagates rejection: if the adopted promise rejects, the adopting
+ * promise rejects with the same reason.
+ */
+test.serial('chaining propagates rejection', async t => {
+  annihilate();
+
+  await startLife(async baggage => {
+    const zone = makeDurableZone(baggage, 'durableRoot');
+    const makeKit = prepareDurableEphemeralPromiseKit(zone);
+
+    const inner = zone.makeOnce('inner', makeKit);
+    const outer = zone.makeOnce('outer', makeKit);
+
+    outer.settler.resolve(inner.consumer.getPromise());
+    inner.settler.reject(Error('inner failed'));
+    await t.throwsAsync(outer.consumer.getPromise(), {
+      message: 'inner failed',
+    });
+  });
+});

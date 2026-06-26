@@ -9,6 +9,21 @@ const noop = () => {};
 harden(noop);
 
 /**
+ * Is `value` a thenable (a native Promise, a Vow's `.when()` result, or any
+ * other object/function with a `.then` method)? Used to adopt promise-like
+ * resolutions, exactly as a native Promise does.
+ *
+ * @param {unknown} value
+ * @returns {value is PromiseLike<any>}
+ */
+const isThenable = value =>
+  value != null &&
+  (typeof value === 'object' || typeof value === 'function') &&
+  // @ts-expect-error narrowing a raw value
+  typeof value.then === 'function';
+harden(isThenable);
+
+/**
  * @import {PromiseKit} from '@endo/promise-kit';
  * @import {Zone} from '@agoric/base-zone';
  */
@@ -25,6 +40,13 @@ harden(noop);
  * - If it was still pending at the restart, it is *rejected* -- the in-flight
  *   work is not retried (this is the opposite of a Vow, which survives and
  *   retries).
+ *
+ * Settlement rules:
+ * - It may only *fulfill* with a storable value (so it can be replayed).
+ *   Resolving with a non-storable value rejects instead.
+ * - `resolve` adopts thenables like a native Promise. To chain one durable
+ *   ephemeral promise to another, resolve to the other's `getPromise()`; the
+ *   adopted settlement is stored durably and replays across upgrade.
  *
  * See `packages/vow/docs/durable-ephemeral-promise.md` for the full design.
  *
@@ -163,6 +185,23 @@ export const prepareDurableEphemeralPromiseKit = zone => {
     ephemera.reject(reason);
   };
 
+  /**
+   * Settle from an adopted thenable. The thenable may settle after this kit was
+   * already settled by another path (a second resolve, an explicit reject), in
+   * which case there is nothing to do.
+   *
+   * @param {object} settler
+   * @param {{ status: string, value: unknown }} state
+   * @param {'fulfilled' | 'rejected'} status
+   * @param {unknown} valueOrReason
+   */
+  const settleAdopted = (settler, state, status, valueOrReason) => {
+    if (state.status !== 'pending') {
+      return;
+    }
+    settle(settler, state, status, valueOrReason);
+  };
+
   const makeKitInternal = zone.exoClassKit(
     'DurableEphemeralPromiseKit',
     {
@@ -189,7 +228,23 @@ export const prepareDurableEphemeralPromiseKit = zone => {
       },
       settler: {
         resolve(value) {
-          settle(this.facets.settler, this.state, 'fulfilled', value);
+          const { settler } = this.facets;
+          const { state } = this;
+          if (isThenable(value)) {
+            // Adopt the thenable's eventual settlement, like a native Promise.
+            // Only the concrete settled value (not the promise) is stored
+            // durably, so resolving one durable ephemeral promise to another's
+            // `getPromise()` replays correctly after upgrade. If the thenable
+            // has not settled by the time the vat is upgraded, this kit is
+            // still pending and is therefore abandoned (rejected) on revival.
+            provideEphemera(settler, state);
+            void Promise.resolve(value).then(
+              v => settleAdopted(settler, state, 'fulfilled', v),
+              r => settleAdopted(settler, state, 'rejected', r),
+            );
+          } else {
+            settle(settler, state, 'fulfilled', value);
+          }
         },
         reject(reason) {
           settle(this.facets.settler, this.state, 'rejected', reason);
